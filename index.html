@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<title>My Vocabulary</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f6f7f9;color:#17191c;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.app{max-width:720px;margin:auto;padding:18px 16px 90px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+h1{font-size:28px;margin:0}.sub{color:#73777f;font-size:14px;margin-top:4px}
+button{border:0;border-radius:12px;padding:11px 14px;font-size:15px;background:#111827;color:white}
+button.secondary{background:#e8eaee;color:#222}.card{background:white;border-radius:18px;padding:16px;margin:12px 0;box-shadow:0 2px 12px #00000008}
+.nav{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0}.nav button{padding:10px 4px;font-size:13px}
+input,textarea,select{width:100%;border:1px solid #dfe2e7;border-radius:12px;padding:12px;font-size:16px;background:#fff;margin:6px 0 12px}
+textarea{min-height:80px;resize:vertical}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label{font-size:13px;color:#626872}.word{font-size:22px;font-weight:700}.meaning{color:#555;margin-top:5px}.meta{font-size:12px;color:#777;margin-top:8px}
+.badge{display:inline-block;background:#eef0f4;border-radius:999px;padding:5px 9px;font-size:12px;margin:3px}
+.hidden{display:none}.reviewWord{text-align:center;padding:22px 8px}.prompt{font-size:21px;line-height:1.45;margin:18px 0}.answer{font-size:18px;line-height:1.5;padding:14px;background:#f4f5f7;border-radius:12px;margin:12px 0}
+.actions{display:flex;gap:10px}.actions button{flex:1}.empty{text-align:center;color:#777;padding:30px 10px}
+.small{font-size:13px;color:#70757d}.topicrow{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #eee}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div><h1>My Vocabulary</h1><div class="sub">Read → collect → retrieve → use</div></div>
+    <button onclick="show('add')">＋ Add</button>
+  </div>
+
+  <div class="nav">
+    <button onclick="show('home')">Home</button>
+    <button onclick="show('words')">Words</button>
+    <button onclick="show('review')">Review</button>
+    <button onclick="show('topics')">Topics</button>
+  </div>
+
+  <section id="home">
+    <div class="card">
+      <div class="small">TODAY'S REVIEW</div>
+      <div style="font-size:34px;font-weight:700;margin:4px 0" id="dueCount">0</div>
+      <div class="small">words waiting for practice</div>
+      <button style="margin-top:14px;width:100%" onclick="show('review')">Start review</button>
+    </div>
+    <div class="card">
+      <div class="small">YOUR VOCABULARY</div>
+      <div style="font-size:30px;font-weight:700" id="totalCount">0</div>
+      <div class="small">saved words</div>
+    </div>
+    <div class="card">
+      <div style="font-weight:700;margin-bottom:8px">Quick idea</div>
+      <div class="small">Don't collect everything. Save words you want to recognize, understand, and eventually use yourself.</div>
+    </div>
+  </section>
+
+  <section id="add" class="hidden">
+    <div class="card">
+      <h2>Add a word</h2>
+      <label>Word / phrase</label><input id="word" placeholder="e.g. reluctant">
+      <label>Meaning</label><input id="meaning" placeholder="e.g. unwilling / hesitant">
+      <label>Usage / pattern</label><input id="usage" placeholder="e.g. be reluctant to do sth">
+      <label>Example from reading</label><textarea id="example" placeholder="Original sentence..."></textarea>
+      <label>My example</label><textarea id="myExample" placeholder="A sentence about your own life..."></textarea>
+      <div class="grid">
+        <div><label>Topic</label><select id="topic"></select></div>
+        <div><label>Source</label><input id="source" placeholder="Book / article"></div>
+      </div>
+      <button onclick="saveWord()" style="width:100%">Save word</button>
+      <button class="secondary" onclick="show('home')" style="width:100%;margin-top:8px">Cancel</button>
+    </div>
+  </section>
+
+  <section id="words" class="hidden">
+    <input id="search" placeholder="🔎 Search words, meanings, examples..." oninput="renderWords()">
+    <div id="wordList"></div>
+  </section>
+
+  <section id="topics" class="hidden">
+    <div class="card"><h2>Topics</h2><div id="topicList"></div></div>
+  </section>
+
+  <section id="review" class="hidden">
+    <div class="card">
+      <div class="small" id="reviewProgress"></div>
+      <div id="reviewArea"></div>
+    </div>
+  </section>
+</div>
+
+<script>
+const TOPICS=["Feelings & Emotions","Personality & Behavior","Communication","Thoughts & Opinions","Relationships","Daily Life","Movement & Actions","Description","Conflict","Society & Culture","Nature & Environment","Idioms & Phrases","Words I Want to Use"];
+let words=JSON.parse(localStorage.getItem("myVocabulary")||"[]");
+let reviewQueue=[], reviewIndex=0, revealed=false;
+
+function save(){localStorage.setItem("myVocabulary",JSON.stringify(words));updateCounts();}
+function esc(s){return String(s||"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
+function show(id){
+  document.querySelectorAll("section").forEach(s=>s.classList.add("hidden"));
+  document.getElementById(id).classList.remove("hidden");
+  if(id==="words")renderWords();
+  if(id==="topics")renderTopics();
+  if(id==="review")startReview();
+  if(id==="add")populateTopics();
+  updateCounts();
+}
+function populateTopics(){topic.innerHTML=TOPICS.map(t=>`<option>${esc(t)}</option>`).join("");}
+function updateCounts(){
+  const now=Date.now();
+  const due=words.filter(w=>!w.nextReview||w.nextReview<=now).length;
+  dueCount.textContent=due; totalCount.textContent=words.length;
+}
+function saveWord(){
+  const w={id:crypto.randomUUID(),word:word.value.trim(),meaning:meaning.value.trim(),usage:usage.value.trim(),example:example.value.trim(),myExample:myExample.value.trim(),topic:topic.value,source:source.value.trim(),created:Date.now(),nextReview:Date.now(),interval:0,streak:0};
+  if(!w.word){alert("Please enter a word.");return;}
+  words.unshift(w);save();
+  ["word","meaning","usage","example","myExample","source"].forEach(id=>document.getElementById(id).value="");
+  show("words");
+}
+function renderWords(){
+  const q=(search.value||"").toLowerCase();
+  const arr=words.filter(w=>(w.word+" "+w.meaning+" "+w.usage+" "+w.example+" "+w.myExample+" "+w.topic).toLowerCase().includes(q));
+  wordList.innerHTML=arr.length?arr.map(w=>`
+    <div class="card">
+      <div class="word">${esc(w.word)}</div>
+      <div class="meaning">${esc(w.meaning)}</div>
+      ${w.usage?`<div><b>Usage:</b> ${esc(w.usage)}</div>`:""}
+      ${w.example?`<div class="small" style="margin-top:8px">“${esc(w.example)}”</div>`:""}
+      ${w.myExample?`<div style="margin-top:8px"><b>My example:</b> ${esc(w.myExample)}</div>`:""}
+      <div class="meta"><span class="badge">${esc(w.topic)}</span>${w.source?`<span class="badge">${esc(w.source)}</span>`:""}</div>
+    </div>`).join(""):`<div class="empty">No words found.</div>`;
+}
+function renderTopics(){
+  const counts={};words.forEach(w=>counts[w.topic]=(counts[w.topic]||0)+1);
+  topicList.innerHTML=TOPICS.map(t=>`<div class="topicrow"><span>${esc(t)}</span><b>${counts[t]||0}</b></div>`).join("");
+}
+function startReview(){
+  const now=Date.now();
+  reviewQueue=words.filter(w=>!w.nextReview||w.nextReview<=now).sort((a,b)=>(a.nextReview||0)-(b.nextReview||0));
+  reviewIndex=0;revealed=false;renderReview();
+}
+function renderReview(){
+  if(reviewIndex>=reviewQueue.length){
+    reviewArea.innerHTML=`<div class="reviewWord"><div style="font-size:44px">🎉</div><h2>All done!</h2><p class="small">Come back tomorrow for your next review.</p></div>`;
+    reviewProgress.textContent="";return;
+  }
+  const w=reviewQueue[reviewIndex];reviewProgress.textContent=`${reviewIndex+1} / ${reviewQueue.length}`;
+  reviewArea.innerHTML=`
+    <div class="reviewWord">
+      <div class="small">What is the best English word / phrase?</div>
+      <div class="prompt">${esc(w.meaning||w.example||"Recall this word")}</div>
+      ${w.usage?`<div class="small">Pattern: ${esc(w.usage)}</div>`:""}
+      ${revealed?`<div class="answer"><b>${esc(w.word)}</b><br>${esc(w.example||"")}${w.myExample?`<br><br>My example: ${esc(w.myExample)}`:""}</div>`:""}
+    </div>
+    ${!revealed?`<button style="width:100%" onclick="revealed=true;renderReview()">Reveal answer</button>`:
+    `<div class="actions"><button class="secondary" onclick="rate(false)">× Need practice</button><button onclick="rate(true)">✓ I knew it</button></div>`}`;
+}
+function rate(known){
+  const w=reviewQueue[reviewIndex];
+  if(known){
+    w.streak=(w.streak||0)+1;
+    const days=[1,3,7,14,30,60];
+    w.interval=days[Math.min(w.streak-1,days.length-1)];
+  }else{w.streak=0;w.interval=1;}
+  w.lastReviewed=Date.now();w.nextReview=Date.now()+w.interval*86400000;
+  save();reviewIndex++;revealed=false;renderReview();
+}
+populateTopics();updateCounts();
+</script>
+</body>
+</html>
